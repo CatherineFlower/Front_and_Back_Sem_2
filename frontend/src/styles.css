@@ -1,0 +1,171 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Inter, Arial, sans-serif;
+    background: #f5f7fb;
+    color: #1f2937;
+}
+
+button,
+input,
+textarea {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+    border: none;
+    border-radius: 12px;
+    padding: 10px 14px;
+    background: #2563eb;
+    color: white;
+    transition: 0.2s ease;
+}
+
+button:hover {
+    opacity: 0.92;
+}
+
+button.secondary {
+    background: #e5e7eb;
+    color: #111827;
+}
+
+button.danger {
+    background: #dc2626;
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 16px 48px;
+}
+
+.hero {
+    margin-bottom: 24px;
+}
+
+.hero h1 {
+    margin: 0 0 8px;
+    font-size: 36px;
+}
+
+.hero p {
+    margin: 0;
+    color: #4b5563;
+    line-height: 1.6;
+}
+
+.layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 24px;
+}
+
+.panel {
+    background: white;
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+
+.panel h2 {
+    margin-top: 0;
+    margin-bottom: 16px;
+}
+
+.form {
+    display: grid;
+    gap: 12px;
+}
+
+.form input,
+.form textarea {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: #fff;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.error {
+    margin-top: 16px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+.products {
+    display: grid;
+    gap: 14px;
+}
+
+.product-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 16px;
+    background: #fafafa;
+}
+
+.product-card__top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: start;
+    margin-bottom: 10px;
+}
+
+.product-card__top h3 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.product-card__top span {
+    font-size: 13px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    border-radius: 999px;
+    padding: 6px 10px;
+}
+
+.product-card__desc {
+    margin: 0 0 12px;
+    color: #4b5563;
+    line-height: 1.5;
+}
+
+.product-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 14px;
+    font-weight: 600;
+}
+
+.product-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+@media (max-width: 900px) {
+    .layout {
+        grid-template-columns: 1fr;
+    }
+}
