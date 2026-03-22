@@ -1,39 +1,52 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Практика 1 — карточка товара (SCSS)</title>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PR 1 — Карточка товара</title>
+  <link rel="stylesheet" href="./public/main.css" />
+</head>
+<body>
+<main class="page">
+  <section class="product-card product-card--accent">
+    <div class="product-card__image"></div>
 
-    <!-- Результат компиляции SCSS -->
-    <link rel="stylesheet" href="./public/main.css" />
-  </head>
-  <body>
-    <main class="page">
-      <article class="product-card product-card--accent">
-        <div class="product-card__image" aria-hidden="true"></div>
+    <div class="product-card__content">
+      <span class="product-card__badge">Хит продаж</span>
+      <h1 class="product-card__title">Механическая клавиатура Aeloria K87</h1>
+      <p class="product-card__desc">
+        Компактная игровая клавиатура формата TKL с RGB-подсветкой,
+        горячей заменой переключателей и прочным алюминиевым корпусом.
+        Подходит для учёбы, программирования и повседневной работы.
+      </p>
 
-        <div class="product-card__content">
-          <h1 class="product-card__title">Наушники ProSound</h1>
-          <p class="product-card__desc">
-            Лёгкие, удобные, с хорошей шумоизоляцией. Пример карточки для практики.
-          </p>
+      <ul class="product-card__features">
+        <li>87 клавиш, формат TKL</li>
+        <li>Hot-swap переключатели</li>
+        <li>RGB-подсветка с режимами</li>
+        <li>Подключение по USB-C</li>
+      </ul>
 
-          <div class="product-card__footer">
-            <span class="product-card__price">4 990 ₽</span>
-            <a class="btn" href="#">Купить</a>
-          </div>
+      <div class="product-card__footer">
+        <div>
+          <p class="product-card__old-price">8 990 ₽</p>
+          <p class="product-card__price">6 990 ₽</p>
         </div>
-      </article>
 
-      <section class="note">
-        <h2 class="note__title">Что нужно сделать студенту</h2>
-        <ol class="note__list">
-          <li>Изменить карточку под свой товар.</li>
-          <li>Добавить минимум 2 переменные, 1 миксин, вложенность.</li>
-          <li>Скомпилировать SCSS в CSS (папка <code>public/</code>).</li>
-        </ol>
-      </section>
-    </main>
-  </body>
+        <a href="#" class="btn">Купить</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="note">
+    <h2 class="note__title">Что реализовано в работе</h2>
+    <ul class="note__list">
+      <li>Использованы переменные SCSS для цветов, отступов и скругления.</li>
+      <li>Добавлен миксин для кнопки и карточек.</li>
+      <li>Применена вложенность селекторов.</li>
+      <li>Сделана адаптивная карточка товара.</li>
+    </ul>
+  </section>
+</main>
+</body>
 </html>

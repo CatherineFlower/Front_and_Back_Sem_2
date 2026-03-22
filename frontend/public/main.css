@@ -1,1 +1,155 @@
-*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#111;color:#f5f5f5}.page{max-width:980px;margin:40px auto;padding:0 16px;display:grid;gap:22px}.product-card{display:grid;grid-template-columns:220px 1fr;gap:14px;background:#1b1b1b;border-radius:14px;padding:18px}.product-card--accent{border:2px solid #3498db}.product-card__image{border-radius:14px;min-height:160px;background:radial-gradient(circle at 20% 20%,rgba(255,255,255,.18),transparent 45%),linear-gradient(135deg,rgba(52,152,219,.45),rgba(155,89,182,.35))}.product-card__content{display:grid;gap:10px;align-content:start}.product-card__title{margin:0;font-size:22px}.product-card__desc{margin:0;opacity:.85;line-height:1.4}.product-card__footer{margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:12px}.product-card__price{font-size:20px;font-weight:700}.btn{display:inline-block;padding:10px 14px;border-radius:10px;background:#3498db;color:#fff;text-decoration:none;font-weight:600;line-height:1}.btn:hover{filter:brightness(1.05)}.note{background:#151515;border-radius:14px;padding:16px}.note__title{margin:0 0 10px;font-size:18px}.note__list{margin:0;padding-left:18px;opacity:.9}
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #eef2ff 0%, #f4f6fb 100%);
+  color: #1f2430;
+}
+
+.page {
+  max-width: 1100px;
+  margin: 48px auto;
+  padding: 0 16px;
+  display: grid;
+  gap: 24px;
+}
+
+.product-card {
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 18px 40px rgba(31, 36, 48, 0.12);
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 28px;
+  padding: 28px;
+  border: 1px solid #e5e7eb;
+}
+.product-card--accent {
+  border-top: 6px solid #6c63ff;
+}
+.product-card__image {
+  min-height: 320px;
+  border-radius: 20px;
+  background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.95), transparent 28%), linear-gradient(135deg, #8b85ff 0%, #6c63ff 45%, #312e81 100%);
+  position: relative;
+  overflow: hidden;
+}
+.product-card__image::after {
+  content: "";
+  position: absolute;
+  inset: 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.product-card__content {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+.product-card__badge {
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(108, 99, 255, 0.12);
+  color: #5148e6;
+  font-size: 14px;
+  font-weight: 700;
+}
+.product-card__title {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.15;
+}
+.product-card__desc {
+  margin: 0;
+  color: #6b7280;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.product-card__features {
+  margin: 0;
+  padding-left: 20px;
+  color: #1f2430;
+  display: grid;
+  gap: 8px;
+}
+.product-card__features li {
+  line-height: 1.5;
+}
+.product-card__footer {
+  margin-top: 10px;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.product-card__old-price {
+  margin: 0 0 4px;
+  color: #6b7280;
+  text-decoration: line-through;
+  font-size: 16px;
+}
+.product-card__price {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 800;
+  color: #5148e6;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 20px;
+  border-radius: 12px;
+  background: #6c63ff;
+  color: #ffffff;
+  text-decoration: none;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: 0.2s ease-in-out;
+}
+.btn:hover {
+  transform: translateY(-1px);
+  background: #5148e6;
+}
+
+.note {
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 18px 40px rgba(31, 36, 48, 0.12);
+  padding: 22px;
+  border: 1px solid #e5e7eb;
+}
+.note__title {
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+.note__list {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+@media (max-width: 840px) {
+  .product-card {
+    grid-template-columns: 1fr;
+  }
+  .product-card__image {
+    min-height: 240px;
+  }
+  .product-card__title {
+    font-size: 28px;
+  }
+}
+
+/*# sourceMappingURL=main.css.map */

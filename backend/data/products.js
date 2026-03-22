@@ -1,6 +1,5 @@
-// In-memory "БД" для практики. На следующих занятиях можно заменить на файл/SQLite/PostgreSQL.
 module.exports = [
-  { id: 1, title: "Кофе", price: 199 },
-  { id: 2, title: "Чай", price: 149 },
-  { id: 3, title: "Шоколад", price: 129 }
+  { id: 1, title: "Механическая клавиатура", price: 6990 },
+  { id: 2, title: "Игровая мышь", price: 3490 },
+  { id: 3, title: "USB-C хаб", price: 2590 }
 ];
