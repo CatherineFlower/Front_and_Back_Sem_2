@@ -1,142 +1,308 @@
 import { useEffect, useMemo, useState } from "react";
-import { createProduct, deleteProduct, getProducts, updateProduct } from "./api/productsApi";
+import {
+  createProduct,
+  deleteProduct,
+  getProducts,
+  updateProduct,
+} from "./api/productsApi";
+import "./styles.css";
 
-/**
- * Практика 4 (заготовка).
- * Важно: это НЕ готовое решение. В файле api/productsApi.js стоят TODO.
- * Цель: подключить React к вашему Express API и выполнить базовый CRUD.
- */
+const initialForm = {
+  title: "",
+  category: "",
+  description: "",
+  price: "",
+  stock: "",
+  rating: "",
+  imageUrl: "",
+};
+
 export default function App() {
   const [items, setItems] = useState([]);
+  const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState(null);
 
-  // Минимальная форма добавления товара
-  const [title, setTitle] = useState("");
-  const [price, setPrice] = useState("");
+  const canSubmit = useMemo(() => {
+    return (
+        form.title.trim() !== "" &&
+        form.category.trim() !== "" &&
+        form.description.trim() !== "" &&
+        form.price !== "" &&
+        form.stock !== ""
+    );
+  }, [form]);
 
-  const canSubmit = useMemo(() => title.trim() !== "" && price !== "", [title, price]);
-
-  async function load() {
-    setError("");
+  async function loadProducts() {
     setLoading(true);
+    setError("");
+
     try {
-      const data = await getProducts(); // TODO: заработает после реализации productsApi.js
+      const data = await getProducts();
       setItems(data);
     } catch (e) {
-      setError(String(e?.message || e));
+      setError(String(e?.response?.data?.error || e?.message || e));
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
+    loadProducts();
   }, []);
 
-  async function onAdd(e) {
-    e.preventDefault();
-    if (!canSubmit) return;
+  function handleChange(event) {
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  }
 
+  function resetForm() {
+    setForm(initialForm);
+    setEditingId(null);
     setError("");
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    if (!canSubmit) {
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+
+    const payload = {
+      title: form.title.trim(),
+      category: form.category.trim(),
+      description: form.description.trim(),
+      price: Number(form.price),
+      stock: Number(form.stock),
+      rating: form.rating === "" ? undefined : Number(form.rating),
+      imageUrl: form.imageUrl.trim(),
+    };
+
     try {
-      await createProduct({
-        title: title.trim(),
-        // TODO (студентам): дополнить payload полями category/description/stock/...
-        price: Number(price),
-      });
-      setTitle("");
-      setPrice("");
-      await load();
+      if (editingId) {
+        await updateProduct(editingId, payload);
+      } else {
+        await createProduct(payload);
+      }
+
+      resetForm();
+      await loadProducts();
     } catch (e) {
-      setError(String(e?.message || e));
+      setError(String(e?.response?.data?.error || e?.message || e));
+    } finally {
+      setSubmitting(false);
     }
   }
 
-  async function onDelete(id) {
+  function handleEdit(product) {
+    setEditingId(product.id);
+    setForm({
+      title: product.title ?? "",
+      category: product.category ?? "",
+      description: product.description ?? "",
+      price: String(product.price ?? ""),
+      stock: String(product.stock ?? ""),
+      rating: product.rating === undefined ? "" : String(product.rating),
+      imageUrl: product.imageUrl ?? "",
+    });
     setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function handleDelete(id) {
+    setError("");
+
     try {
       await deleteProduct(id);
-      await load();
+      if (editingId === id) {
+        resetForm();
+      }
+      await loadProducts();
     } catch (e) {
-      setError(String(e?.message || e));
+      setError(String(e?.response?.data?.error || e?.message || e));
     }
   }
 
-  async function onPricePlus(id, currentPrice) {
+  async function handleRaisePrice(product) {
     setError("");
+
     try {
-      await updateProduct(id, { price: Number(currentPrice) + 10 });
-      await load();
+      await updateProduct(product.id, { price: Number(product.price) + 1000 });
+      await loadProducts();
     } catch (e) {
-      setError(String(e?.message || e));
+      setError(String(e?.response?.data?.error || e?.message || e));
     }
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: 24, fontFamily: "system-ui" }}>
-      <h1>Практика 4 — React + Express API</h1>
-
-      <p style={{ color: "#555" }}>
-        Если видите ошибку <code>TODO: реализуйте ...</code>, значит вы ещё не реализовали функции в{" "}
-        <code>src/api/productsApi.js</code>.
-      </p>
-
-      <section style={{ marginTop: 24, padding: 16, border: "1px solid #ddd", borderRadius: 12 }}>
-        <h2 style={{ marginTop: 0 }}>Добавить товар</h2>
-        <form onSubmit={onAdd} style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Название"
-            style={{ padding: 10, minWidth: 220 }}
-          />
-          <input
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            placeholder="Цена"
-            type="number"
-            style={{ padding: 10, width: 140 }}
-          />
-          <button disabled={!canSubmit} style={{ padding: "10px 14px" }}>
-            Добавить
-          </button>
-          <button type="button" onClick={load} style={{ padding: "10px 14px" }}>
-            Обновить список
-          </button>
-        </form>
-      </section>
-
-      <section style={{ marginTop: 24 }}>
-        <h2>Список товаров</h2>
-
-        {loading && <p>Загрузка...</p>}
-        {error && (
-          <p style={{ color: "crimson" }}>
-            Ошибка: {error}
-            <br />
-            Проверьте, что: (1) backend запущен на 3000, (2) CORS настроен, (3) TODO в productsApi.js реализованы.
+      <div className="page">
+        <header className="hero">
+          <h1>Практическая работа 5 — Swagger + готовое CRUD-приложение</h1>
+          <p>
+            Frontend подключён к Express API. Backend полностью задокументирован
+            через Swagger UI.
           </p>
-        )}
+          <p>
+            Swagger:{" "}
+            <a href="http://localhost:3000/api-docs" target="_blank" rel="noreferrer">
+              http://localhost:3000/api-docs
+            </a>
+          </p>
+        </header>
 
-        <ul style={{ paddingLeft: 18 }}>
-          {items.map((p) => (
-            <li key={p.id} style={{ marginBottom: 8 }}>
-              <b>{p.title}</b> — {p.price} ₽{" "}
-              <button onClick={() => onPricePlus(p.id, p.price)} style={{ marginLeft: 8 }}>
-                +10 ₽
-              </button>
-              <button onClick={() => onDelete(p.id)} style={{ marginLeft: 8 }}>
-                Удалить
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="layout">
+          <section className="panel">
+            <h2>{editingId ? "Редактирование товара" : "Добавление товара"}</h2>
 
-        <p style={{ color: "#555" }}>
-          TODO (студентам): добавить категории, описание, остаток на складе, картинку и т.п. + сделать красивый UI.
-        </p>
-      </section>
-    </div>
+            <form className="form" onSubmit={handleSubmit}>
+              <input
+                  name="title"
+                  value={form.title}
+                  onChange={handleChange}
+                  placeholder="Название"
+              />
+              <input
+                  name="category"
+                  value={form.category}
+                  onChange={handleChange}
+                  placeholder="Категория"
+              />
+              <textarea
+                  name="description"
+                  value={form.description}
+                  onChange={handleChange}
+                  placeholder="Описание"
+                  rows={4}
+              />
+              <input
+                  name="price"
+                  type="number"
+                  min="0"
+                  value={form.price}
+                  onChange={handleChange}
+                  placeholder="Цена"
+              />
+              <input
+                  name="stock"
+                  type="number"
+                  min="0"
+                  value={form.stock}
+                  onChange={handleChange}
+                  placeholder="Остаток на складе"
+              />
+              <input
+                  name="rating"
+                  type="number"
+                  min="0"
+                  max="5"
+                  step="0.1"
+                  value={form.rating}
+                  onChange={handleChange}
+                  placeholder="Рейтинг (0–5)"
+              />
+              <input
+                  name="imageUrl"
+                  value={form.imageUrl}
+                  onChange={handleChange}
+                  placeholder="Ссылка на изображение"
+              />
+
+              <div className="actions">
+                <button type="submit" disabled={!canSubmit || submitting}>
+                  {editingId ? "Сохранить изменения" : "Добавить товар"}
+                </button>
+
+                <button type="button" className="secondary" onClick={resetForm}>
+                  Очистить
+                </button>
+
+                <button type="button" className="secondary" onClick={loadProducts}>
+                  Обновить список
+                </button>
+              </div>
+            </form>
+
+            {error && <div className="error">Ошибка: {error}</div>}
+          </section>
+
+          <section className="panel">
+            <h2>Список товаров</h2>
+
+            {loading ? (
+                <p>Загрузка...</p>
+            ) : (
+                <div className="products">
+                  {items.map((product) => (
+                      <article className="product-card" key={product.id}>
+                        <div className="product-card__image-wrap">
+                          {product.imageUrl ? (
+                              <img
+                                  src={product.imageUrl}
+                                  alt={product.title}
+                                  className="product-card__image"
+                              />
+                          ) : (
+                              <div className="product-card__image product-card__image--placeholder">
+                                Нет изображения
+                              </div>
+                          )}
+                        </div>
+
+                        <div className="product-card__content">
+                          <div className="product-card__top">
+                            <h3>{product.title}</h3>
+                            <span>{product.category}</span>
+                          </div>
+
+                          <p className="product-card__desc">{product.description}</p>
+
+                          <div className="product-card__meta">
+                            <span>Цена: {product.price} ₽</span>
+                            <span>Остаток: {product.stock}</span>
+                            <span>Рейтинг: {product.rating ?? 0}</span>
+                          </div>
+
+                          {product.imageUrl && (
+                              <a
+                                  href={product.imageUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="image-link"
+                              >
+                                Открыть изображение
+                              </a>
+                          )}
+
+                          <div className="product-card__actions">
+                            <button onClick={() => handleEdit(product)}>
+                              Редактировать
+                            </button>
+                            <button
+                                className="secondary"
+                                onClick={() => handleRaisePrice(product)}
+                            >
+                              +1000 ₽
+                            </button>
+                            <button
+                                className="danger"
+                                onClick={() => handleDelete(product.id)}
+                            >
+                              Удалить
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                  ))}
+                </div>
+            )}
+          </section>
+        </div>
+      </div>
   );
 }
