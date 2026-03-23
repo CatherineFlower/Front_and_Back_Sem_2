@@ -24,6 +24,14 @@
   https://github.com/CatherineFlower/Front_and_Back_Sem_2/tree/FB-4-PR-1-2
 - Ветка `PR-3-4` - практические работы №3-4  
   https://github.com/CatherineFlower/Front_and_Back_Sem_2/tree/PR-3-4
+- Ветка `PR-5` - практическая работа №5 
+  https://github.com/CatherineFlower/Front_and_Back_Sem_2/tree/PR-5
+- Ветка `PR7-8` - практические работы №7-8 
+  https://github.com/CatherineFlower/Front_and_Back_Sem_2/tree/PR7-8
+- Ветка `PR-9-10` - практические работы №9-10 
+  https://github.com/CatherineFlower/Front_and_Back_Sem_2/tree/PR-9-10
+- Ветка `pr11-12` - практические работы №11-12 
+  https://github.com/CatherineFlower/Front_and_Back_Sem_2/tree/pr11-12
 
 Аналогичным образом остальные практические работы будут размещены в соответствующих ветках.
 
