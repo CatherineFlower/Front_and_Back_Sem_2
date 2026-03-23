@@ -2,27 +2,68 @@ const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { nanoid } = require("nanoid");
-
-const { authMiddleware, JWT_SECRET } = require("../middleware/authJwt");
+const authJwt = require("../middleware/authJwt");
 
 const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET || "super-secret-key";
 
-/**
- * Учебное хранилище пользователей.
- * Здесь НЕТ базы данных: пользователи живут в памяти процесса Node.js.
- *
- * Важно:
- * - После перезапуска сервера массив users очищается.
- * - В реальных проектах вместо users[] будет БД (Postgres, Mongo, SQLite) или файл.
- * - В users[] мы НЕ храним пароль, только bcrypt-хеш (passwordHash).
- */
-const users = [];
+let users = [];
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function publicUser(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    first_name: user.first_name,
+    last_name: user.last_name,
+  };
+}
 
 /**
  * @swagger
- * tags:
- *   - name: Auth
- *     description: Регистрация и вход (практики 7–8)
+ * components:
+ *   schemas:
+ *     RegisterRequest:
+ *       type: object
+ *       required: [email, first_name, last_name, password]
+ *       properties:
+ *         email:
+ *           type: string
+ *         first_name:
+ *           type: string
+ *         last_name:
+ *           type: string
+ *         password:
+ *           type: string
+ *     LoginRequest:
+ *       type: object
+ *       required: [email, password]
+ *       properties:
+ *         email:
+ *           type: string
+ *         password:
+ *           type: string
+ *     AuthUser:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *         email:
+ *           type: string
+ *         first_name:
+ *           type: string
+ *         last_name:
+ *           type: string
+ *     LoginResponse:
+ *       type: object
+ *       properties:
+ *         accessToken:
+ *           type: string
+ *         user:
+ *           $ref: '#/components/schemas/AuthUser'
  */
 
 /**
@@ -30,85 +71,63 @@ const users = [];
  * /api/auth/register:
  *   post:
  *     summary: Регистрация пользователя
- *     description: Создаёт пользователя и сохраняет пароль в виде bcrypt-хеша.
  *     tags: [Auth]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required: [email, first_name, last_name, password]
- *             properties:
- *               email: { type: string, example: "ivan@mail.ru" }
- *               first_name: { type: string, example: "Иван" }
- *               last_name: { type: string, example: "Иванов" }
- *               password: { type: string, example: "qwerty123" }
+ *             $ref: '#/components/schemas/RegisterRequest'
  *     responses:
  *       201:
- *         description: Пользователь создан
+ *         description: Пользователь зарегистрирован
  *       400:
- *         description: Некорректные данные
+ *         description: Ошибка валидации
+ *       409:
+ *         description: Пользователь уже существует
  */
 router.post("/register", async (req, res) => {
-  // 1) Из тела запроса (JSON) берём поля пользователя
-  // req.body появляется благодаря app.use(express.json()) в app.js
-  const { email, first_name, last_name, password } = req.body;
+  const email = normalizeEmail(req.body.email);
+  const first_name = String(req.body.first_name || "").trim();
+  const last_name = String(req.body.last_name || "").trim();
+  const password = String(req.body.password || "");
 
-  // 2) Минимальная валидация: все поля обязательны
-  // TODO студентам: валидировать email-формат, длину пароля, пробелы и т.д.
-  if (!email || !first_name || !last_name || !password) {
-    return res.status(400).json({
-      error: "validation_error",
-      message: "Нужны поля: email, first_name, last_name, password",
-    });
+  if (!email || !email.includes("@")) {
+    return res.status(400).json({ error: "Valid email is required" });
   }
 
-  // 3) Проверяем, что пользователь с таким email ещё не зарегистрирован
-  const normalizedEmail = String(email).toLowerCase();
-  const exists = users.find((u) => u.email === normalizedEmail);
+  if (!first_name) {
+    return res.status(400).json({ error: "first_name is required" });
+  }
+
+  if (!last_name) {
+    return res.status(400).json({ error: "last_name is required" });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ error: "Password must contain at least 6 characters" });
+  }
+
+  const exists = users.some((user) => user.email === email);
   if (exists) {
-    return res.status(400).json({
-      error: "user_exists",
-      message: "Пользователь с таким email уже зарегистрирован",
-    });
+    return res.status(409).json({ error: "User already exists" });
   }
 
-  // 4) bcrypt.hash — это “солёный” хеш пароля.
-  // 10 — cost factor (сколько “тяжело” считать хеш). Чем больше, тем медленнее, но безопаснее.
-  // Соль библиотека делает автоматически
-  //  $2b$10$KYVbZ5JFVfqu0oV98LnF5eTk4QTe2e4PQG7QNYfhumEpGdi/867AO
-  //  |--|--|----------------------|-------------------------------|
-  //  |  |           |                          |
-  //  |  |           |                          └─ итоговый хеш
-  //  |  |           └─ соль
-  //  |  └─ cost factor
-  //  └─ версия bcrypt
-  const passwordHash = await bcrypt.hash(String(password), 10);
-  // 10 — cost factor; определяет, насколько вычисление хеша будет тяжёлым.
-  //	•	8 — быстрее;
-	//  •	10 — стандартно;
-	//  •	12 — медленнее;
-	//  •	14 — ещё тяжелее.
+  const passwordHash = await bcrypt.hash(password, 10);
 
-  // 5) Создаём пользователя (id — случайный)
   const user = {
     id: nanoid(8),
-    email: normalizedEmail,
-    first_name: String(first_name),
-    last_name: String(last_name),
-    passwordHash, // ВАЖНО: храним только хеш, не пароль
+    email,
+    first_name,
+    last_name,
+    passwordHash,
   };
 
-  // 6) Сохраняем в "учебное хранилище" (память)
   users.push(user);
 
-  // 7) Возвращаем публичные данные (НИКОГДА не возвращаем passwordHash клиенту)
   return res.status(201).json({
-    id: user.id,
-    email: user.email,
-    first_name: user.first_name,
-    last_name: user.last_name,
+    message: "User registered successfully",
+    user: publicUser(user),
   });
 });
 
@@ -116,110 +135,79 @@ router.post("/register", async (req, res) => {
  * @swagger
  * /api/auth/login:
  *   post:
- *     summary: Вход в систему
- *     description: Проверяет пароль и возвращает accessToken (JWT).
+ *     summary: Вход пользователя
  *     tags: [Auth]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required: [email, password]
- *             properties:
- *               email: { type: string, example: "ivan@mail.ru" }
- *               password: { type: string, example: "qwerty123" }
+ *             $ref: '#/components/schemas/LoginRequest'
  *     responses:
  *       200:
- *         description: Успешный вход (JWT выдан)
+ *         description: Успешный вход
+ *       400:
+ *         description: Ошибка валидации
  *       401:
- *         description: Неверные учётные данные
+ *         description: Неверные данные
  */
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+  const email = normalizeEmail(req.body.email);
+  const password = String(req.body.password || "");
 
-  // 1) Базовая проверка входных данных
   if (!email || !password) {
-    return res.status(400).json({
-      error: "validation_error",
-      message: "Нужны поля: email, password",
-    });
+    return res.status(400).json({ error: "Email and password are required" });
   }
 
-  // 2) Находим пользователя по email
-  const normalizedEmail = String(email).toLowerCase();
-  const user = users.find((u) => u.email === normalizedEmail);
+  const user = users.find((item) => item.email === email);
   if (!user) {
-    // Важно: одинаковая ошибка и для “нет пользователя”, и для “неверный пароль”
-    // чтобы не давать атакующему понять, существует ли email.
-    return res.status(401).json({
-      error: "invalid_credentials",
-      message: "Неверный email или пароль",
-    });
+    return res.status(401).json({ error: "Invalid email or password" });
   }
 
-  // 3) bcrypt.compare сравнивает “введённый пароль” с “хешем из хранилища”
-  const ok = await bcrypt.compare(String(password), user.passwordHash);
-  if (!ok) {
-    return res.status(401).json({
-      error: "invalid_credentials",
-      message: "Неверный email или пароль",
-    });
+  const isMatch = await bcrypt.compare(password, user.passwordHash);
+  if (!isMatch) {
+    return res.status(401).json({ error: "Invalid email or password" });
   }
 
-  // 4) JWT — это токен, который клиент кладёт в заголовок:
-  // Authorization: Bearer <token>
-  //
-  // payload (то что попадет в токен):
-  // - sub (subject) = id пользователя
-  // - email = для удобства
-  //
-  // expiresIn: "15m" — токен протухнет через 15 минут (токен с ограниченным сроком дейтсвия)
   const accessToken = jwt.sign(
-    { sub: user.id, email: user.email },
-    JWT_SECRET,
-    { expiresIn: "15m" }
+      {
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+      },
+      JWT_SECRET,
+      { expiresIn: "1h" }
   );
 
-// JWT_SECRET - Это ключ подписи.
-
-  return res.json({ accessToken });
+  return res.status(200).json({
+    accessToken,
+    user: publicUser(user),
+  });
 });
 
 /**
  * @swagger
  * /api/auth/me:
  *   get:
- *     summary: Возвращает текущего пользователя (по JWT)
+ *     summary: Получить профиль текущего пользователя
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Пользователь
+ *         description: Профиль пользователя
  *       401:
  *         description: Нет токена или токен невалиден
  */
-router.get("/me", authMiddleware, (req, res) => {
-  // authMiddleware уже проверил JWT и положил payload в req.user
-  // req.user = { sub, email, iat, exp }
-  const userId = req.user.sub;
-
-  // В учебной версии ищем пользователя в памяти
-  const user = users.find((u) => u.id === userId);
-  if (!user) {
-    return res.status(404).json({
-      error: "user_not_found",
-      message: "Пользователь не найден",
-    });
-  }
-
-  // Возвращаем “профиль” 
-  return res.json({
-    id: user.id,
-    email: user.email,
-    first_name: user.first_name,
-    last_name: user.last_name,
+router.get("/me", authJwt, (req, res) => {
+  return res.status(200).json({
+    user: {
+      id: req.user.id,
+      email: req.user.email,
+      first_name: req.user.first_name,
+      last_name: req.user.last_name,
+    },
   });
 });
 

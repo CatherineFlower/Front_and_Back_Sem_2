@@ -1,142 +1,215 @@
-import { useEffect, useMemo, useState } from "react";
-import { createProduct, deleteProduct, getProducts, updateProduct } from "./api/productsApi";
+import { useEffect, useState } from "react";
+import { getProducts } from "./api/productsApi";
+import {
+  getMe,
+  getProtectedProduct,
+  loginUser,
+  registerUser,
+} from "./api/authApi";
+import "./styles.css";
 
-/**
- * Практика 4 (заготовка).
- * Важно: это НЕ готовое решение. В файле api/productsApi.js стоят TODO.
- * Цель: подключить React к вашему Express API и выполнить базовый CRUD.
- */
+const registerInitial = {
+  email: "",
+  first_name: "",
+  last_name: "",
+  password: "",
+};
+
+const loginInitial = {
+  email: "",
+  password: "",
+};
+
 export default function App() {
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [registerForm, setRegisterForm] = useState(registerInitial);
+  const [loginForm, setLoginForm] = useState(loginInitial);
+  const [token, setToken] = useState(localStorage.getItem("accessToken") || "");
+  const [user, setUser] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [protectedProduct, setProtectedProduct] = useState(null);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
-  // Минимальная форма добавления товара
-  const [title, setTitle] = useState("");
-  const [price, setPrice] = useState("");
-
-  const canSubmit = useMemo(() => title.trim() !== "" && price !== "", [title, price]);
-
-  async function load() {
-    setError("");
-    setLoading(true);
+  async function loadProducts() {
     try {
-      const data = await getProducts(); // TODO: заработает после реализации productsApi.js
-      setItems(data);
+      const data = await getProducts();
+      setProducts(data);
     } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setLoading(false);
+      setError(String(e?.response?.data?.error || e?.message || e));
     }
   }
 
   useEffect(() => {
-    load();
+    loadProducts();
   }, []);
 
-  async function onAdd(e) {
+  function onRegisterChange(e) {
+    const { name, value } = e.target;
+    setRegisterForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  function onLoginChange(e) {
+    const { name, value } = e.target;
+    setLoginForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  async function handleRegister(e) {
     e.preventDefault();
-    if (!canSubmit) return;
-
     setError("");
+    setMessage("");
+
     try {
-      await createProduct({
-        title: title.trim(),
-        // TODO (студентам): дополнить payload полями category/description/stock/...
-        price: Number(price),
-      });
-      setTitle("");
-      setPrice("");
-      await load();
+      const result = await registerUser(registerForm);
+      setMessage(result.message || "Пользователь зарегистрирован");
+      setRegisterForm(registerInitial);
     } catch (e) {
-      setError(String(e?.message || e));
+      setError(String(e?.response?.data?.error || e?.message || e));
     }
   }
 
-  async function onDelete(id) {
+  async function handleLogin(e) {
+    e.preventDefault();
     setError("");
+    setMessage("");
+
     try {
-      await deleteProduct(id);
-      await load();
+      const result = await loginUser(loginForm);
+      setToken(result.accessToken);
+      localStorage.setItem("accessToken", result.accessToken);
+      setUser(result.user);
+      setMessage("Вход выполнен успешно");
+      setLoginForm(loginInitial);
     } catch (e) {
-      setError(String(e?.message || e));
+      setError(String(e?.response?.data?.error || e?.message || e));
     }
   }
 
-  async function onPricePlus(id, currentPrice) {
+  async function handleMe() {
     setError("");
+    setMessage("");
+
     try {
-      await updateProduct(id, { price: Number(currentPrice) + 10 });
-      await load();
+      const result = await getMe(token);
+      setUser(result.user);
+      setMessage("Профиль успешно получен");
     } catch (e) {
-      setError(String(e?.message || e));
+      setError(String(e?.response?.data?.error || e?.message || e));
     }
+  }
+
+  async function handleProtectedProduct() {
+    setError("");
+    setMessage("");
+
+    if (!products.length) return;
+
+    try {
+      const result = await getProtectedProduct(products[0].id, token);
+      setProtectedProduct(result);
+      setMessage("Защищённый товар успешно получен");
+    } catch (e) {
+      setError(String(e?.response?.data?.error || e?.message || e));
+    }
+  }
+
+  function handleLogout() {
+    setToken("");
+    setUser(null);
+    setProtectedProduct(null);
+    localStorage.removeItem("accessToken");
+    setMessage("Выход выполнен");
+    setError("");
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: 24, fontFamily: "system-ui" }}>
-      <h1>Практика 4 — React + Express API</h1>
-
-      <p style={{ color: "#555" }}>
-        Если видите ошибку <code>TODO: реализуйте ...</code>, значит вы ещё не реализовали функции в{" "}
-        <code>src/api/productsApi.js</code>.
-      </p>
-
-      <section style={{ marginTop: 24, padding: 16, border: "1px solid #ddd", borderRadius: 12 }}>
-        <h2 style={{ marginTop: 0 }}>Добавить товар</h2>
-        <form onSubmit={onAdd} style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Название"
-            style={{ padding: 10, minWidth: 220 }}
-          />
-          <input
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            placeholder="Цена"
-            type="number"
-            style={{ padding: 10, width: 140 }}
-          />
-          <button disabled={!canSubmit} style={{ padding: "10px 14px" }}>
-            Добавить
-          </button>
-          <button type="button" onClick={load} style={{ padding: "10px 14px" }}>
-            Обновить список
-          </button>
-        </form>
-      </section>
-
-      <section style={{ marginTop: 24 }}>
-        <h2>Список товаров</h2>
-
-        {loading && <p>Загрузка...</p>}
-        {error && (
-          <p style={{ color: "crimson" }}>
-            Ошибка: {error}
-            <br />
-            Проверьте, что: (1) backend запущен на 3000, (2) CORS настроен, (3) TODO в productsApi.js реализованы.
+      <div className="page">
+        <header className="hero">
+          <h1>Практические работы 7–8</h1>
+          <p>Регистрация, вход, JWT и защищённые маршруты.</p>
+          <p>
+            Swagger:{" "}
+            <a href="http://localhost:3000/api-docs" target="_blank" rel="noreferrer">
+              http://localhost:3000/api-docs
+            </a>
           </p>
+        </header>
+
+        <div className="layout">
+          <section className="panel">
+            <h2>Регистрация</h2>
+            <form className="form" onSubmit={handleRegister}>
+              <input name="email" value={registerForm.email} onChange={onRegisterChange} placeholder="Email" />
+              <input name="first_name" value={registerForm.first_name} onChange={onRegisterChange} placeholder="Имя" />
+              <input name="last_name" value={registerForm.last_name} onChange={onRegisterChange} placeholder="Фамилия" />
+              <input name="password" type="password" value={registerForm.password} onChange={onRegisterChange} placeholder="Пароль" />
+              <button type="submit">Зарегистрироваться</button>
+            </form>
+          </section>
+
+          <section className="panel">
+            <h2>Вход</h2>
+            <form className="form" onSubmit={handleLogin}>
+              <input name="email" value={loginForm.email} onChange={onLoginChange} placeholder="Email" />
+              <input name="password" type="password" value={loginForm.password} onChange={onLoginChange} placeholder="Пароль" />
+              <button type="submit">Войти</button>
+            </form>
+
+            <div className="actions">
+              <button type="button" className="secondary" onClick={handleMe} disabled={!token}>
+                Проверить профиль
+              </button>
+              <button type="button" className="secondary" onClick={handleProtectedProduct} disabled={!token}>
+                Проверить защищённый товар
+              </button>
+              <button type="button" className="danger" onClick={handleLogout}>
+                Выйти
+              </button>
+            </div>
+          </section>
+        </div>
+
+        {message && <div className="message">{message}</div>}
+        {error && <div className="error">Ошибка: {error}</div>}
+
+        {token && (
+            <section className="panel">
+              <h2>Токен</h2>
+              <code className="token">{token}</code>
+            </section>
         )}
 
-        <ul style={{ paddingLeft: 18 }}>
-          {items.map((p) => (
-            <li key={p.id} style={{ marginBottom: 8 }}>
-              <b>{p.title}</b> — {p.price} ₽{" "}
-              <button onClick={() => onPricePlus(p.id, p.price)} style={{ marginLeft: 8 }}>
-                +10 ₽
-              </button>
-              <button onClick={() => onDelete(p.id)} style={{ marginLeft: 8 }}>
-                Удалить
-              </button>
-            </li>
-          ))}
-        </ul>
+        {user && (
+            <section className="panel">
+              <h2>Текущий пользователь</h2>
+              <p><strong>Email:</strong> {user.email}</p>
+              <p><strong>Имя:</strong> {user.first_name}</p>
+              <p><strong>Фамилия:</strong> {user.last_name}</p>
+            </section>
+        )}
 
-        <p style={{ color: "#555" }}>
-          TODO (студентам): добавить категории, описание, остаток на складе, картинку и т.п. + сделать красивый UI.
-        </p>
-      </section>
-    </div>
+        {protectedProduct && (
+            <section className="panel">
+              <h2>Защищённый товар</h2>
+              <p><strong>Название:</strong> {protectedProduct.title}</p>
+              <p><strong>Категория:</strong> {protectedProduct.category}</p>
+              <p><strong>Цена:</strong> {protectedProduct.price} ₽</p>
+            </section>
+        )}
+
+        <section className="panel">
+          <h2>Открытый список товаров</h2>
+          <div className="products">
+            {products.map((product) => (
+                <article key={product.id} className="product-card">
+                  <h3>{product.title}</h3>
+                  <p>{product.description}</p>
+                  <p><strong>Категория:</strong> {product.category}</p>
+                  <p><strong>Цена:</strong> {product.price} ₽</p>
+                  <p><strong>Остаток:</strong> {product.stock}</p>
+                </article>
+            ))}
+          </div>
+        </section>
+      </div>
   );
 }
