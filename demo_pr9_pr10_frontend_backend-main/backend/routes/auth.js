@@ -3,104 +3,99 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { nanoid } = require("nanoid");
 
-const {
-  authMiddleware,
-  JWT_SECRET,
-  REFRESH_SECRET,
-  ACCESS_EXPIRES_IN,
-  REFRESH_EXPIRES_IN,
-} = require("../middleware/authJwt");
-
 const router = express.Router();
 
-/**
- * =========================
- * Практики 7–10: что делает этот файл
- * =========================
- *
- * Практики 7–8 (база):
- * - /register: создаём пользователя, пароль хешируем через bcrypt (пароль НЕ храним в открытом виде)
- * - /login: проверяем пароль (bcrypt.compare) и выдаём accessToken (JWT)
- * - /me: защищённый маршрут, возвращает текущего пользователя (по accessToken)
- *
- * Практика 9 (НОВОЕ):
- * - вводим refreshToken (долгоживущий токен)
- * - добавляем /refresh: по refreshToken выдаём НОВУЮ пару токенов
- * - реализуем "ротацию refresh-токенов": старый refresh становится недействительным, выдаём новый
- *
- * Практика 10 (НОВОЕ, но на фронте):
- * - клиент хранит accessToken + refreshToken (в учебной раелизации в localStorage)
- * - клиент автоматически подставляет accessToken в Authorization
- * - если сервер вернул 401 (access протух/невалиден) → клиент вызывает /refresh
- *   и повторяет исходный запрос уже с новым accessToken
- *
- * Кратко и по сути:
- * 1) login выдаёт токены
- * 2) me требует accessToken
- * 3) refresh выдаёт новую пару токенов
- * 4) на фронте это происходит автоматически (interceptors) — но этот файл обеспечивает бэкенд-логику
- */
+const JWT_SECRET = process.env.JWT_SECRET || "super-secret-key";
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "super-refresh-secret-key";
 
-/**
- * Учебное хранилище пользователей.
- * Здесь НЕТ базы данных: пользователи живут в памяти процесса Node.js.
- *
- * Важно:
- * - После перезапуска сервера массив users очищается.
- * - В реальных проектах вместо users[] будет БД (Postgres, Mongo, SQLite) или файл.
- * - В users[] мы НЕ храним пароль, только bcrypt-хеш (passwordHash).
- */
-const users = [];
+let users = [
+  {
+    id: "u1",
+    email: "demo@example.com",
+    first_name: "Demo",
+    last_name: "User",
+    passwordHash: bcrypt.hashSync("password123", 10),
+  },
+];
 
-/**
- * Практика 9: хранилище refresh-токенов в памяти процесса (учебный вариант).
- *
- * Зачем это нужно:
- * - чтобы можно было "отзывать" refresh-токены
- * - чтобы реализовать ротацию: старый refresh удаляем, новый выдаём и сохраняем
- *
- * Ограничение учебного подхода:
- * - после перезапуска сервера Set очищается → старые refresh-токены "забываются"
- *
- * TODO (Практика 9+ дополнительное задание - не обязетльно для сдачи практики): заменить на БД/Redis, если усложняем проект.
- */
-const refreshTokens = new Set();
+let refreshTokens = [];
 
-/**
- * Практика 9: генерация accessToken и refreshToken
- * - accessToken: короткий срок жизни (ACCESS_EXPIRES_IN), используется для Authorization: Bearer ...
- * - refreshToken: более долгий срок жизни (REFRESH_EXPIRES_IN), используется только для обновления пары токенов
- *
- * Важно:
- * - access и refresh подписываются РАЗНЫМИ секретами (JWT_SECRET и REFRESH_SECRET),
- *   чтобы нельзя было использовать refresh как access (и наоборот).
- */
-function generateAccessToken(user) {
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function publicUser(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    first_name: user.first_name,
+    last_name: user.last_name,
+  };
+}
+
+function createAccessToken(user) {
   return jwt.sign(
-    { sub: user.id, email: user.email },
-    JWT_SECRET,
-    { expiresIn: ACCESS_EXPIRES_IN }
+      {
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+      },
+      JWT_SECRET,
+      { expiresIn: "20s" }
   );
 }
-// expiresIn: ACCESS_EXPIRES_IN - это TTL (время жизни) accessToken - задаем в AuthGwt.js
-//const ACCESS_EXPIRES_IN = process.env.ACCESS_EXPIRES_IN || "15m";
 
-function generateRefreshToken(user) {
+function createRefreshToken(user) {
   return jwt.sign(
-    { sub: user.id, email: user.email },
-    REFRESH_SECRET,
-    { expiresIn: REFRESH_EXPIRES_IN }
+      {
+        id: user.id,
+        email: user.email,
+        tokenVersion: nanoid(6),
+      },
+      JWT_REFRESH_SECRET,
+      { expiresIn: "7d" }
   );
 }
-// expiresIn: REFRESH_EXPIRES_IN - это TTL (время жизни) refreshToken - задаем в AuthGwt.js
-// const REFRESH_EXPIRES_IN = process.env.REFRESH_EXPIRES_IN || "7d"; 
-
 
 /**
  * @swagger
- * tags:
- *   - name: Auth
- *     description: Регистрация и вход (практики 7–10)
+ * components:
+ *   schemas:
+ *     AuthUser:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *         email:
+ *           type: string
+ *         first_name:
+ *           type: string
+ *         last_name:
+ *           type: string
+ *     LoginRequest:
+ *       type: object
+ *       required: [email, password]
+ *       properties:
+ *         email:
+ *           type: string
+ *         password:
+ *           type: string
+ *     LoginResponse:
+ *       type: object
+ *       properties:
+ *         accessToken:
+ *           type: string
+ *         refreshToken:
+ *           type: string
+ *         user:
+ *           $ref: '#/components/schemas/AuthUser'
+ *     RefreshRequest:
+ *       type: object
+ *       required: [refreshToken]
+ *       properties:
+ *         refreshToken:
+ *           type: string
  */
 
 /**
@@ -108,7 +103,6 @@ function generateRefreshToken(user) {
  * /api/auth/register:
  *   post:
  *     summary: Регистрация пользователя
- *     description: Создаёт пользователя и сохраняет пароль в виде bcrypt-хеша.
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -118,76 +112,64 @@ function generateRefreshToken(user) {
  *             type: object
  *             required: [email, first_name, last_name, password]
  *             properties:
- *               email: { type: string, example: "ivan@mail.ru" }
- *               first_name: { type: string, example: "Иван" }
- *               last_name: { type: string, example: "Иванов" }
- *               password: { type: string, example: "qwerty123" }
+ *               email:
+ *                 type: string
+ *               first_name:
+ *                 type: string
+ *               last_name:
+ *                 type: string
+ *               password:
+ *                 type: string
  *     responses:
  *       201:
- *         description: Пользователь создан
+ *         description: Пользователь зарегистрирован
  *       400:
- *         description: Некорректные данные
+ *         description: Ошибка валидации
+ *       409:
+ *         description: Пользователь уже существует
  */
 router.post("/register", async (req, res) => {
-  // 1) Из тела запроса (JSON) берём поля пользователя
-  // req.body появляется благодаря app.use(express.json()) в app.js
-  const { email, first_name, last_name, password } = req.body;
+  const email = normalizeEmail(req.body.email);
+  const first_name = String(req.body.first_name || "").trim();
+  const last_name = String(req.body.last_name || "").trim();
+  const password = String(req.body.password || "");
 
-  // 2) Минимальная валидация: все поля обязательны
-  // TODO студентам: валидировать email-формат, длину пароля, пробелы и т.д.
-  if (!email || !first_name || !last_name || !password) {
-    return res.status(400).json({
-      error: "validation_error",
-      message: "Нужны поля: email, first_name, last_name, password",
-    });
+  if (!email || !email.includes("@")) {
+    return res.status(400).json({ error: "Valid email is required" });
   }
 
-  // 3) Проверяем, что пользователь с таким email ещё не зарегистрирован
-  const normalizedEmail = String(email).toLowerCase();
-  const exists = users.find((u) => u.email === normalizedEmail);
+  if (!first_name) {
+    return res.status(400).json({ error: "first_name is required" });
+  }
+
+  if (!last_name) {
+    return res.status(400).json({ error: "last_name is required" });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ error: "Password must contain at least 6 characters" });
+  }
+
+  const exists = users.some((user) => user.email === email);
   if (exists) {
-    return res.status(400).json({
-      error: "user_exists",
-      message: "Пользователь с таким email уже зарегистрирован",
-    });
+    return res.status(409).json({ error: "User already exists" });
   }
 
-  // 4) bcrypt.hash — это “солёный” хеш пароля.
-  // 10 — cost factor (сколько “тяжело” считать хеш). Чем больше, тем медленнее, но безопаснее.
-  // Соль библиотека делает автоматически и "зашивает" внутрь итогового хеша.
-  // Пример хеша:
-  //  $2b$10$KYVbZ5JFVfqu0oV98LnF5eTk4QTe2e4PQG7QNYfhumEpGdi/867AO
-  //  |--|--|----------------------|-------------------------------|
-  //  |  |           |                          |
-  //  |  |           |                          └─ итоговый хеш
-  //  |  |           └─ соль
-  //  |  └─ cost factor
-  //  └─ версия bcrypt
-  const passwordHash = await bcrypt.hash(String(password), 10);
-  // 10 — cost factor; определяет, насколько вычисление хеша будет тяжёлым.
-  //  • 8  — быстрее
-  //  • 10 — стандартно
-  //  • 12 — медленнее
-  //  • 14 — ещё тяжелее
+  const passwordHash = await bcrypt.hash(password, 10);
 
-  // 5) Создаём пользователя (id — случайный)
   const user = {
     id: nanoid(8),
-    email: normalizedEmail,
-    first_name: String(first_name),
-    last_name: String(last_name),
-    passwordHash, // ВАЖНО: храним только хеш, не пароль
+    email,
+    first_name,
+    last_name,
+    passwordHash,
   };
 
-  // 6) Сохраняем в "учебное хранилище" (память)
   users.push(user);
 
-  // 7) Возвращаем публичные данные (НИКОГДА не возвращаем passwordHash клиенту)
   return res.status(201).json({
-    id: user.id,
-    email: user.email,
-    first_name: user.first_name,
-    last_name: user.last_name,
+    message: "User registered successfully",
+    user: publicUser(user),
   });
 });
 
@@ -195,225 +177,116 @@ router.post("/register", async (req, res) => {
  * @swagger
  * /api/auth/login:
  *   post:
- *     summary: Вход в систему
- *     description: Проверяет пароль и возвращает пару токенов (access + refresh).
+ *     summary: Вход пользователя с получением access и refresh токенов
  *     tags: [Auth]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required: [email, password]
- *             properties:
- *               email: { type: string, example: "ivan@mail.ru" }
- *               password: { type: string, example: "qwerty123" }
+ *             $ref: '#/components/schemas/LoginRequest'
  *     responses:
  *       200:
- *         description: Успешный вход (токены выданы)
+ *         description: Успешный вход
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 accessToken: { type: string }
- *                 refreshToken: { type: string }
+ *               $ref: '#/components/schemas/LoginResponse'
  *       400:
- *         description: Некорректные данные (не хватает email/password)
+ *         description: Ошибка валидации
  *       401:
- *         description: Неверные учётные данные
+ *         description: Неверные данные
  */
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+  const email = normalizeEmail(req.body.email);
+  const password = String(req.body.password || "");
 
-  // 1) Базовая проверка входных данных
   if (!email || !password) {
-    return res.status(400).json({
-      error: "validation_error",
-      message: "Нужны поля: email, password",
-    });
+    return res.status(400).json({ error: "Email and password are required" });
   }
 
-  // 2) Находим пользователя по email
-  const normalizedEmail = String(email).toLowerCase();
-  const user = users.find((u) => u.email === normalizedEmail);
+  const user = users.find((item) => item.email === email);
   if (!user) {
-    // Важно: одинаковая ошибка и для “нет пользователя”, и для “неверный пароль”
-    // чтобы не давать атакующему понять, существует ли email.
-    return res.status(401).json({
-      error: "invalid_credentials",
-      message: "Неверный email или пароль",
-    });
+    return res.status(401).json({ error: "Invalid email or password" });
   }
 
-  // 3) bcrypt.compare сравнивает “введённый пароль” с “хешем из хранилища”
-  const ok = await bcrypt.compare(String(password), user.passwordHash);
-  if (!ok) {
-    return res.status(401).json({
-      error: "invalid_credentials",
-      message: "Неверный email или пароль",
-    });
+  const isMatch = await bcrypt.compare(password, user.passwordHash);
+  if (!isMatch) {
+    return res.status(401).json({ error: "Invalid email or password" });
   }
 
-  /**
-   * Практики 7–8:
-   * - accessToken используется для доступа к защищённым маршрутам:
-   *   Authorization: Bearer <accessToken>
-   *
-   * Практика 9 (главное изменение):
-   * - login теперь выдаёт ПАРУ токенов: accessToken + refreshToken
-   * - refreshToken нужен, чтобы получать новый accessToken без повторного логина
-   * - refreshToken мы сохраняем в refreshTokens (Set), чтобы можно было:
-   *   - проверять, что токен не "отозван"
-   *   - делать ротацию токенов в /refresh (старый удалить, новый выдать)
-   */
+  const accessToken = createAccessToken(user);
+  const refreshToken = createRefreshToken(user);
 
-  // 4) Генерируем токены согласно настройкам (секреты и TTL в middleware/authJwt.js)
-  const accessToken = generateAccessToken(user);     // короткоживущий
-  const refreshToken = generateRefreshToken(user);   // долгоживущий
+  refreshTokens.push({
+    token: refreshToken,
+    userId: user.id,
+  });
 
-  // 5) Сохраняем refreshToken в "whitelist" (учебное хранилище в памяти)
-  // Если сервак перезапустить — Set очистится (это норм для учебного проекта)
-  refreshTokens.add(refreshToken);
-
-  // 6) Возвращаем пару токенов клиенту (Практика 9)
-  return res.json({ accessToken, refreshToken });
+  return res.status(200).json({
+    accessToken,
+    refreshToken,
+    user: publicUser(user),
+  });
 });
 
 /**
  * @swagger
  * /api/auth/refresh:
  *   post:
- *     summary: Обновление пары токенов (access + refresh)
- *     description: Принимает refresh-токен и возвращает новую пару токенов.
+ *     summary: Обновить пару токенов по refresh token
  *     tags: [Auth]
- *     parameters:
- *       - in: header
- *         name: x-refresh-token
- *         required: false
- *         schema: { type: string }
- *         description: Refresh-токен (учебный вариант). Можно также передать в body как refreshToken.
  *     requestBody:
- *       required: false
+ *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               refreshToken: { type: string }
+ *             $ref: '#/components/schemas/RefreshRequest'
  *     responses:
  *       200:
  *         description: Новая пара токенов
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 accessToken: { type: string }
- *                 refreshToken: { type: string }
- *       400:
- *         description: Не передан refresh-токен
  *       401:
- *         description: Refresh-токен невалиден/протух/не найден
+ *         description: Refresh token отсутствует или невалиден
  */
 router.post("/refresh", (req, res) => {
-  /**
-   * Практика 9: refresh-токен
-   *
-   * По заданию refreshToken обычно передают из заголовков.
-   * Для удобства проверки в Swagger/Postman поддерживаем два варианта:
-   * 1) Заголовок: x-refresh-token: <token>
-   * 2) Тело запроса: { "refreshToken": "<token>" }
-   */
-  const headerToken = req.headers["x-refresh-token"];
-  const refreshToken = headerToken || req.body?.refreshToken;
+  const refreshToken = String(req.body.refreshToken || "");
 
   if (!refreshToken) {
-    return res.status(400).json({
-      error: "refresh_token_required",
-      message: "Нужен refreshToken (в заголовке x-refresh-token или в теле запроса)",
-    });
+    return res.status(401).json({ error: "Refresh token is required" });
   }
 
-  // 1) Проверяем, что refreshToken есть в нашем "хранилище" (Set).
-  // Это позволяет отбрасывать старые/украденные/отозванные токены.
-  if (!refreshTokens.has(refreshToken)) {
-    return res.status(401).json({
-      error: "invalid_refresh_token",
-      message: "Refresh-токен недействителен (не найден в хранилище)",
-    });
+  const stored = refreshTokens.find((item) => item.token === refreshToken);
+  if (!stored) {
+    return res.status(401).json({ error: "Refresh token is not recognized" });
   }
 
   try {
-    // 2) Проверяем подпись и срок действия refresh-токена.
-    // Важно: refresh проверяется через REFRESH_SECRET (а не JWT_SECRET).
-    const payload = jwt.verify(refreshToken, REFRESH_SECRET);
+    const payload = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
+    const user = users.find((item) => item.id === payload.id);
 
-    // 3) Находим пользователя
-    const user = users.find((u) => u.id === payload.sub);
     if (!user) {
-      return res.status(401).json({
-        error: "user_not_found",
-        message: "Пользователь не найден",
-      });
+      return res.status(401).json({ error: "User not found for refresh token" });
     }
 
-    // 4) Ротация refresh-токена (Практика 9):
-    // - старый refresh удаляем
-    // - выдаём новый refresh и сохраняем его
-    refreshTokens.delete(refreshToken);
+    refreshTokens = refreshTokens.filter((item) => item.token !== refreshToken);
 
-    const newAccessToken = generateAccessToken(user);
-    const newRefreshToken = generateRefreshToken(user);
+    const newAccessToken = createAccessToken(user);
+    const newRefreshToken = createRefreshToken(user);
 
-    refreshTokens.add(newRefreshToken);
-
-    return res.json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
-  } catch (err) {
-    // Если токен протух или подделан — удаляем его из Set (на всякий случай)
-    refreshTokens.delete(refreshToken);
-    return res.status(401).json({
-      error: "refresh_token_invalid_or_expired",
-      message: "Refresh-токен недействителен или срок действия истёк",
+    refreshTokens.push({
+      token: newRefreshToken,
+      userId: user.id,
     });
-  }
-});
 
-/**
- * @swagger
- * /api/auth/me:
- *   get:
- *     summary: Возвращает текущего пользователя (по JWT)
- *     tags: [Auth]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Пользователь
- *       401:
- *         description: Нет токена или токен невалиден
- */
-router.get("/me", authMiddleware, (req, res) => {
-  // authMiddleware уже проверил JWT и положил payload в req.user
-  // req.user = { sub, email, iat, exp }
-  const userId = req.user.sub;
-
-  // В учебной версии ищем пользователя в памяти
-  const user = users.find((u) => u.id === userId);
-  if (!user) {
-    return res.status(404).json({
-      error: "user_not_found",
-      message: "Пользователь не найден",
+    return res.status(200).json({
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+      user: publicUser(user),
     });
+  } catch (error) {
+    refreshTokens = refreshTokens.filter((item) => item.token !== refreshToken);
+    return res.status(401).json({ error: "Invalid or expired refresh token" });
   }
-
-  // Возвращаем “профиль”
-  return res.json({
-    id: user.id,
-    email: user.email,
-    first_name: user.first_name,
-    last_name: user.last_name,
-  });
 });
 
 module.exports = router;
