@@ -1,190 +1,158 @@
 const express = require("express");
 const { nanoid } = require("nanoid");
 const { authMiddleware, requireRole } = require("../middleware/authJwt");
-
-// JSON-store (лекция 2): чтение/запись товаров в backend/data/products.json
-// Важно: products.json — локальное runtime-хранилище (в .gitignore), а стартовые данные — в products.seed.json
-const productsStore = require("../store/productsStore");
+const {
+  getAllProducts,
+  findProductById,
+  addProduct,
+  updateProduct,
+  deleteProduct,
+} = require("../store/productsStore");
 
 const router = express.Router();
 
-/**
- * products.js — маршруты (routes) для работы с товарами
- *
- * Как читать этот файл:
- * 1) Сверху подключаем зависимости (Express, nanoid, authMiddleware, productsStore).
- * 2) Создаём router = "мини-приложение" Express, куда складываем эндпоинты.
- * 3) Работаем с данными через productsStore (JSON-файл), а не через in-memory массив.
- *
- * Важно про хранение (лекция 2):
- * - productsStore.readAll() читает backend/data/products.json
- * - productsStore.add/patch/remove записывают изменения в products.json
- * - если products.json ещё не существует, store создаст его из products.seed.json
- *
- * Важно про "защиту" (Практика 8):
- * - authMiddleware проверяет JWT токен из заголовка:
- *   Authorization: Bearer <token>
- * - Если токена нет/он неверный → 401.
- */
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim() !== "";
+}
+
+function isValidNumber(value) {
+  return value !== "" && !Number.isNaN(Number(value));
+}
 
 /**
  * @swagger
- * components:
- *   schemas:
- *     Product:
- *       type: object
- *       required:
- *         - title
- *         - price
- *       properties:
- *         id:
- *           type: string
- *           description: Уникальный ID товара
- *         title:
- *           type: string
- *           description: Название товара
- *         category:
- *           type: string
- *           description: Категория товара
- *         description:
- *           type: string
- *           description: Описание товара
- *         price:
- *           type: number
- *           description: Цена товара
- *         stock:
- *           type: integer
- *           description: Количество на складе
- *         rating:
- *           type: number
- *           description: Рейтинг (опционально)
- *         imageUrl:
- *           type: string
- *           description: URL картинки (опционально)
- *       example:
- *         id: "p1"
- *         title: "Печенье"
- *         category: "Сладости"
- *         description: "Хрустящее печенье к чаю."
- *         price: 79
- *         stock: 20
- *         rating: 4.6
- *         imageUrl: ""
- */
-
-/**
- * TODO (Практика 8 — JWT):
- * - Сейчас защищены: GET /api/products/:id, PUT /api/products/:id, DELETE /api/products/:id
- * - PATCH /api/products/:id сейчас НЕ защищён.
- *   Сделайте его защищённым так же, как PUT/DELETE:
- *     router.patch("/:id", authMiddleware, ...)
- *
- * TODO (Практика 5 — Swagger):
- * - Допишите Swagger-аннотации для:
- *   - GET /api/products/:id
- *   - PUT /api/products/:id
- *   - PATCH /api/products/:id
- *   - DELETE /api/products/:id
- * - Для защищённых маршрутов добавьте:
+ * /api/products:
+ *   get:
+ *     summary: Получить список товаров
+ *     tags: [Products]
  *     security:
  *       - bearerAuth: []
- *
- * TODO (Практика 3 — качество API):
- * - Добавьте строгую валидацию входных данных:
- *   title/category/description/price/stock (+ корректные типы, NaN, отрицательные значения)
- * - Приведите ошибки к единому формату:
- *   { error: "code", message: "Сообщение на русском" }
+ *     responses:
+ *       200:
+ *         description: Список товаров для user/admin
  */
-
-// GET /api/products — список товаров (публичный)
-router.get("/", async (req, res, next) => {
-  try {
-    const list = await productsStore.readAll();
-    res.json(list);
-  } catch (err) {
-    next(err);
-  }
+router.get("/", authMiddleware, (req, res) => {
+  return res.status(200).json(getAllProducts());
 });
 
-// GET /api/products/:id — один товар (защищённый)
-router.get("/:id", authMiddleware, async (req, res, next) => {
-  try {
-    const list = await productsStore.readAll();
-    const product = list.find((p) => p.id === req.params.id) || null;
+/**
+ * @swagger
+ * /api/products:
+ *   post:
+ *     summary: Создать товар (только admin)
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post("/", authMiddleware, requireRole("admin"), (req, res) => {
+  const { title, category, description, price, stock, imageUrl } = req.body;
 
-    if (!product) return res.status(404).json({ error: "product_not_found", message: "Товар не найден" });
-    res.json(product);
-  } catch (err) {
-    next(err);
+  if (!isNonEmptyString(title) || !isNonEmptyString(category) || !isNonEmptyString(description)) {
+    return res.status(400).json({ error: "title, category and description are required" });
   }
+
+  if (!isValidNumber(price) || Number(price) < 0) {
+    return res.status(400).json({ error: "price must be a number >= 0" });
+  }
+
+  if (!isValidNumber(stock) || Number(stock) < 0) {
+    return res.status(400).json({ error: "stock must be a number >= 0" });
+  }
+
+  const product = addProduct({
+    id: nanoid(8),
+    title: title.trim(),
+    category: category.trim(),
+    description: description.trim(),
+    price: Number(price),
+    stock: Number(stock),
+    imageUrl: typeof imageUrl === "string" ? imageUrl.trim() : "",
+  });
+
+  return res.status(201).json(product);
 });
 
-// POST /api/products — добавить товар (публичный)
-router.post("/", async (req, res, next) => {
-  try {
-    const { title, category, description, price, stock, rating, imageUrl } = req.body;
+/**
+ * @swagger
+ * /api/products/{id}:
+ *   patch:
+ *     summary: Обновить товар (только admin)
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.patch("/:id", authMiddleware, requireRole("admin"), (req, res) => {
+  const product = findProductById(req.params.id);
 
-    // TODO (студентам): полноценная валидация, иначе можно сохранить "мусор"
-    if (typeof title !== "string" || title.trim() === "") {
-      return res.status(400).json({ error: "validation_error", message: "Поле title обязательно (строка)" });
+  if (!product) {
+    return res.status(404).json({ error: "Product not found" });
+  }
+
+  const patch = {};
+
+  if (req.body.title !== undefined) {
+    if (!isNonEmptyString(req.body.title)) {
+      return res.status(400).json({ error: "title must be a non-empty string" });
     }
-
-    const newProduct = {
-      id: nanoid(8),
-      title: title.trim(),
-      category: typeof category === "string" ? category.trim() : "Без категории",
-      description: typeof description === "string" ? description.trim() : "",
-      price: Number(price) || 0,
-      stock: Number(stock) || 0,
-      rating: rating !== undefined ? Number(rating) : undefined,
-      imageUrl: typeof imageUrl === "string" ? imageUrl.trim() : "",
-    };
-
-    await productsStore.add(newProduct);
-    res.status(201).json(newProduct);
-  } catch (err) {
-    next(err);
+    patch.title = req.body.title.trim();
   }
+
+  if (req.body.category !== undefined) {
+    if (!isNonEmptyString(req.body.category)) {
+      return res.status(400).json({ error: "category must be a non-empty string" });
+    }
+    patch.category = req.body.category.trim();
+  }
+
+  if (req.body.description !== undefined) {
+    if (!isNonEmptyString(req.body.description)) {
+      return res.status(400).json({ error: "description must be a non-empty string" });
+    }
+    patch.description = req.body.description.trim();
+  }
+
+  if (req.body.price !== undefined) {
+    if (!isValidNumber(req.body.price) || Number(req.body.price) < 0) {
+      return res.status(400).json({ error: "price must be a number >= 0" });
+    }
+    patch.price = Number(req.body.price);
+  }
+
+  if (req.body.stock !== undefined) {
+    if (!isValidNumber(req.body.stock) || Number(req.body.stock) < 0) {
+      return res.status(400).json({ error: "stock must be a number >= 0" });
+    }
+    patch.stock = Number(req.body.stock);
+  }
+
+  if (req.body.imageUrl !== undefined) {
+    if (typeof req.body.imageUrl !== "string") {
+      return res.status(400).json({ error: "imageUrl must be a string" });
+    }
+    patch.imageUrl = req.body.imageUrl.trim();
+  }
+
+  const updated = updateProduct(req.params.id, patch);
+  return res.status(200).json(updated);
 });
 
-// PUT /api/products/:id — полное обновление (защищённый маршрут в Практике 8)
-router.put("/:id", authMiddleware, requireRole("admin"), async (req, res, next) => {
-  try {
-    // Учебный вариант: используем patch под капотом.
-    // TODO (студентам): реализовать строгий PUT (обязательные поля и типы)
-    const updated = await productsStore.patch(req.params.id, req.body);
+/**
+ * @swagger
+ * /api/products/{id}:
+ *   delete:
+ *     summary: Удалить товар (только admin)
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.delete("/:id", authMiddleware, requireRole("admin"), (req, res) => {
+  const ok = deleteProduct(req.params.id);
 
-    if (!updated) return res.status(404).json({ error: "product_not_found", message: "Товар не найден" });
-    res.json(updated);
-  } catch (err) {
-    next(err);
+  if (!ok) {
+    return res.status(404).json({ error: "Product not found" });
   }
-});
 
-// PATCH /api/products/:id — частичное обновление (СЕЙЧАС НЕ ЗАЩИЩЁН, как TODO для Практики 8)
-router.patch("/:id", async (req, res, next) => {
-  try {
-    const updated = await productsStore.patch(req.params.id, req.body);
-
-    if (!updated) return res.status(404).json({ error: "product_not_found", message: "Товар не найден" });
-    res.json(updated);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// DELETE /api/products/:id — удалить товар (защищённый)
-router.delete("/:id", authMiddleware, requireRole("admin"), async (req, res, next) => {
-  try {
-    const ok = await productsStore.remove(req.params.id);
-
-    if (!ok) return res.status(404).json({ error: "product_not_found", message: "Товар не найден" });
-
-    // Обычно делают 204 No Content, но для наглядности вернём JSON
-    res.json({ ok: true });
-  } catch (err) {
-    next(err);
-  }
+  return res.status(200).json({ ok: true });
 });
 
 module.exports = router;

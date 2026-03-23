@@ -1,56 +1,66 @@
-const path = require("path");
-const fs = require("fs/promises");
+let products = [
+  {
+    id: "p1",
+    title: "Ноутбук ASUS VivoBook",
+    category: "Электроника",
+    description: "Компактный ноутбук для учёбы и программирования.",
+    price: 64990,
+    stock: 5,
+    imageUrl:
+        "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=900&q=80",
+  },
+  {
+    id: "p2",
+    title: "Игровая мышь Logitech",
+    category: "Периферия",
+    description: "Проводная мышь с точным сенсором.",
+    price: 3990,
+    stock: 12,
+    imageUrl:
+        "https://images.unsplash.com/photo-1527814050087-3793815479db?auto=format&fit=crop&w=900&q=80",
+  },
+  {
+    id: "p3",
+    title: "Механическая клавиатура Keychron",
+    category: "Периферия",
+    description: "Клавиатура с подсветкой и hot-swap переключателями.",
+    price: 8990,
+    stock: 7,
+    imageUrl:
+        "https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?auto=format&fit=crop&w=900&q=80",
+  },
+];
 
-const DATA_FILE = path.join(__dirname, "..", "data", "products.json");
-const SEED_FILE = path.join(__dirname, "..", "data", "products.seed.json");
-
-let writeQueue = Promise.resolve();
-
-async function ensureDataFile() {
-  try {
-    await fs.access(DATA_FILE);
-  } catch {
-    const seedRaw = await fs.readFile(SEED_FILE, "utf-8");
-    await fs.writeFile(DATA_FILE, seedRaw, "utf-8");
-  }
+function getAllProducts() {
+  return products;
 }
 
-async function readAll() {
-  await ensureDataFile();
-  const raw = await fs.readFile(DATA_FILE, "utf-8");
-  return JSON.parse(raw || "[]");
+function findProductById(id) {
+  return products.find((product) => product.id === id) || null;
 }
 
-async function writeAll(list) {
-  await ensureDataFile();
-  const payload = JSON.stringify(list, null, 2);
-  writeQueue = writeQueue.then(() => fs.writeFile(DATA_FILE, payload, "utf-8"));
-  return writeQueue;
-}
-
-async function add(product) {
-  const list = await readAll();
-  list.push(product);
-  await writeAll(list);
+function addProduct(product) {
+  products.push(product);
   return product;
 }
 
-async function patch(id, patchObj) {
-  const list = await readAll();
-  const idx = list.findIndex((p) => p.id === id);
-  if (idx === -1) return null;
-  list[idx] = { ...list[idx], ...patchObj };
-  await writeAll(list);
-  return list[idx];
+function updateProduct(id, patch) {
+  const product = findProductById(id);
+  if (!product) return null;
+  Object.assign(product, patch);
+  return product;
 }
 
-async function remove(id) {
-  const list = await readAll();
-  const next = list.filter((p) => p.id !== id);
-  if (next.length === list.length) return false;
-  await writeAll(next);
-  return true;
+function deleteProduct(id) {
+  const before = products.length;
+  products = products.filter((product) => product.id !== id);
+  return products.length !== before;
 }
 
-module.exports = { readAll, add, patch, remove };
-
+module.exports = {
+  getAllProducts,
+  findProductById,
+  addProduct,
+  updateProduct,
+  deleteProduct,
+};
