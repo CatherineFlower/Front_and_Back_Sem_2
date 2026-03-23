@@ -1,82 +1,111 @@
-# Starter: Практики 11–12 — Ролевая модель (RBAC) + контрольная
+# Практические работы 11–12 по дисциплине «Фронтенд и бэкенд разработка»
 
-Этот репозиторий — **учебная заготовка** (не готовое решение).
+## Информация о работе
 
-## Контекст (на базе ПР7–10)
+В данной ветке представлено решение практических работ №11 и №12 по дисциплине «Фронтенд и бэкенд разработка».
 
-- ПР7–8: регистрация/вход, bcrypt, JWT, защищённые маршруты
-- ПР9: refresh-токены + `/api/auth/refresh`
-- ПР10: фронтенд + хранение токенов + авто-refresh при 401 (axios interceptors)
+Практическая работа №11 посвящена реализации ролевой модели доступа (RBAC) с ролями `admin` и `user`.  
+Практическая работа №12 посвящена демонстрации полной системы: аутентификация, refresh tokens, роли, admin API и разграничение прав на операции с товарами.
 
-## Что добавлено в ПР11
+## Что реализовано
 
-- **Роли:** `admin` и `user`
-- **RBAC middleware:** `requireRole("admin")`
-- **Admin API:**
-  - `GET /api/admin/users`
-  - `PATCH /api/admin/users/:id/role`
-- **Товары:**
-  - просмотр доступен user/admin
-  - изменения доступны только admin
+В ходе выполнения работы были реализованы:
 
-## ПР12
+- регистрация пользователя;
+- вход пользователя с получением `accessToken` и `refreshToken`;
+- автоматическое обновление access token через endpoint refresh;
+- хранение токенов на frontend;
+- роли `admin` и `user`;
+- middleware `requireRole("admin")`;
+- маршрут `GET /api/admin/users` только для admin;
+- маршрут `PATCH /api/admin/users/:id/role` только для admin;
+- просмотр товаров для `user` и `admin`;
+- создание, изменение и удаление товаров только для `admin`;
+- frontend-панель для демонстрации ролей, пользователей и товаров;
+- Swagger UI для проверки backend API.
 
-Контрольная демонстрация: RBAC + refresh‑механика (см. `docs/student-handout.md`).
-
----
-
-## Быстрый старт
+## Используемые технологии
 
 ### Backend
+- Node.js
+- Express
+- bcrypt
+- jsonwebtoken
+- swagger-jsdoc
+- swagger-ui-express
+- CORS
+- nanoid
+- Nodemon
+
+### Frontend
+- React
+- Vite
+- Axios
+
+## Тестовые пользователи
+
+### Admin
+- email: `admin@example.com`
+- password: `admin123`
+
+### User
+- email: `user@example.com`
+- password: `user12345`
+
+## Запуск backend
 
 ```bash
 cd backend
-npm i
+npm install
 npm run dev
 ```
 
-- API: http://localhost:3000
-- Swagger UI: http://localhost:3000/api-docs
+После запуска сервер будет доступен по адресу:
 
-### Frontend
+```text
+http://localhost:3000
+```
+
+Swagger UI:
+
+```text
+http://localhost:3000/api-docs
+```
+
+## Запуск frontend
 
 ```bash
 cd frontend
-npm i
+npm install
 npm run dev
 ```
 
-- Frontend: http://localhost:3001
+После запуска frontend будет доступен по адресу:
 
----
+```text
+http://localhost:3001
+```
 
-## Структура
+## Основные маршруты API
 
-Backend:
+### Аутентификация
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `GET /api/auth/me`
 
-- `backend/app.js` — точка входа, Swagger, роуты
-- `backend/middleware/authJwt.js` — `authMiddleware` + `requireRole`
-- `backend/routes/auth.js` — register/login/refresh/me (в токены кладётся `role`)
-- `backend/routes/admin.js` — admin‑эндпоинты (RBAC)
-- `backend/routes/products.js` — товары (просмотр: user/admin, изменение: admin)
-- `backend/store/usersStore.js` — users[] в памяти (учебно)
-- `backend/store/productsStore.js` — товары в JSON (не тема ПР11, осталось из прошлых практик)
+### Admin API
+- `GET /api/admin/users`
+- `PATCH /api/admin/users/:id/role`
 
-Frontend:
+### Товары
+- `GET /api/products` — доступно `user` и `admin`
+- `POST /api/products` — только `admin`
+- `PATCH /api/products/:id` — только `admin`
+- `DELETE /api/products/:id` — только `admin`
 
-- `frontend/src/api/apiClient.js` — axios + interceptors (auto refresh)
-- `frontend/src/api/authApi.js` — login/register/me
-- `frontend/src/api/adminApi.js` — список пользователей + смена роли
-- `frontend/src/App.jsx` — demo‑панель (логин + товары + admin)
+## Результат
 
-Docs:
-
-- `docs/student-handout.md` — методичка по работе с репозиторием по ПР11–12
-
----
-
-## Важно (учебные ограничения)
-
-- Пользователи хранятся в памяти (`users[]`) → после перезапуска бэка всё очищается.
-- Refresh‑токены тоже в памяти (`Set`) → после перезапуска refresh станет недействительным.
-- Роль хранится в токене → после смены роли лучше перелогиниться/refresh.
+Ветка содержит завершённое решение практических работ №11 и №12.  
+Backend реализует ролевую модель доступа и разграничение прав.  
+Frontend позволяет войти под разными ролями, просматривать товары, управлять пользователями и выполнять демонстрацию RBAC.
